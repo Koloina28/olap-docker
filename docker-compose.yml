@@ -1,0 +1,109 @@
+services:
+  cube_api:
+    restart: always
+    image: cubejs/cube:v0.36.0
+    ports:
+      - 4000:4000
+    environment:
+      - CUBEJS_DB_TYPE=clickhouse
+      - CUBEJS_DB_HOST=clickhouse
+      - CUBEJS_DB_PORT=8123
+      - CUBEJS_DB_NAME=data_test
+      - CUBEJS_DB_USER=koloina
+      - CUBEJS_DB_PASS=pwdkoloina
+      #- CUBEJS_API_SECRET=secret
+      - CUBEJS_DEV_MODE=true
+    volumes:
+      - .:/cube/conf
+    depends_on:
+      - clickhouse
+      - cube_refresh_worker
+      - cubestore_router
+      - cubestore_worker_1
+      - cubestore_worker_2
+    networks:
+      - projet_default
+
+  cube_refresh_worker:
+    restart: always
+    image: cubejs/cube:v0.36.0
+    environment:
+      - CUBEJS_DB_TYPE=clickhouse
+      - CUBEJS_DB_HOST=clickhouse
+      - CUBEJS_DB_PORT=9000
+      - CUBEJS_DB_NAME=data_test
+      - CUBEJS_DB_USER=koloina
+      - CUBEJS_DB_PASS=pwdkoloina
+      - CUBEJS_API_SECRET=secret
+      - CUBEJS_REFRESH_WORKER=true
+    volumes:
+      - .:/cube/conf
+    depends_on:
+      - clickhouse
+    networks:
+      - projet_default
+
+  cubestore_router:
+    restart: always
+    image: cubejs/cubestore:latest
+    environment:
+      - CUBESTORE_WORKERS=cubestore_worker_1:10001,cubestore_worker_2:10002
+      - CUBESTORE_REMOTE_DIR=/cube/data
+      - CUBESTORE_META_PORT=9999
+      - CUBESTORE_SERVER_NAME=cubestore_router:9999
+    volumes:
+      - .cubestore:/cube/data
+    networks:
+      - projet_default
+
+  cubestore_worker_1:
+    restart: always
+    image: cubejs/cubestore:latest
+    environment:
+      - CUBESTORE_WORKERS=cubestore_worker_1:10001,cubestore_worker_2:10002
+      - CUBESTORE_SERVER_NAME=cubestore_worker_1:10001
+      - CUBESTORE_WORKER_PORT=10001
+      - CUBESTORE_REMOTE_DIR=/cube/data
+      - CUBESTORE_META_ADDR=cubestore_router:9999
+    volumes:
+      - .cubestore:/cube/data
+    depends_on:
+      - cubestore_router
+    networks:
+      - projet_default
+
+  cubestore_worker_2:
+    restart: always
+    image: cubejs/cubestore:latest
+    environment:
+      - CUBESTORE_WORKERS=cubestore_worker_1:10001,cubestore_worker_2:10002
+      - CUBESTORE_SERVER_NAME=cubestore_worker_2:10002
+      - CUBESTORE_WORKER_PORT=10002
+      - CUBESTORE_REMOTE_DIR=/cube/data
+      - CUBESTORE_META_ADDR=cubestore_router:9999
+    volumes:
+      - .cubestore:/cube/data
+    depends_on:
+      - cubestore_router
+    networks:
+      - projet_default
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:22.2.3
+    container_name: clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - ./clickhouse/users.xml:/etc/clickhouse-server/users.xml
+      - clickhouse_data:/var/lib/clickhouse
+    networks:
+      - projet_default
+
+volumes:
+  clickhouse_data: {}
+
+networks:
+  projet_default:
+    external: true
+
